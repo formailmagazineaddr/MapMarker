@@ -1,10 +1,10 @@
 package com.example.user.mapmarker;
 
 import android.Manifest;
+import android.graphics.Color;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.content.ContextCompat;    //what?
 import android.support.v4.app.ActivityCompat;    //what?
-import android.support.v7.app.AppCompatActivity;    //what?
 import android.app.Activity;
 import android.os.Bundle;
 import android.os.Build;
@@ -20,7 +20,6 @@ import android.content.Context;
 import android.content.IntentSender;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
-import android.databinding.DataBindingUtil;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -32,8 +31,8 @@ import com.google.android.gms.maps.GoogleMap.OnMapClickListener;
 import com.google.android.gms.maps.GoogleMap.OnMapLongClickListener;
 import com.google.android.gms.maps.GoogleMap.OnMarkerClickListener;
 import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.common.api.Status;
 
+import com.google.android.gms.common.api.Status;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.ConnectionResult;
@@ -47,8 +46,12 @@ import com.google.android.gms.location.LocationSettingsRequest;
 import com.google.android.gms.location.LocationSettingsResult;
 import com.google.android.gms.location.LocationSettingsStatusCodes;
 
-import com.example.mylibmaps.markerOperations;
-//import com.example.user.mapmarker.databinding.ActivityMapsBinding;
+import com.example.mylibmaps.*;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
+//import com.example.mylibmaps.markerOperations;
+
+import java.util.*;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback,
     GoogleApiClient.ConnectionCallbacks,
@@ -67,16 +70,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     protected static final String TAG = "debugTag";
     private final static String LOCATION_KEY = "location-key";
-    /**
-     * 10秒間隔で位置情報を更新。実際には多少頻度が多くなるかもしれない。
-     */
-    public static final long UPDATE_INTERVAL_IN_MILLISECONDS = 10000;
-
-    /**
-     * 最速の更新間隔。この値より頻繁に更新されることはない。
-     */
-    public static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS =
-            UPDATE_INTERVAL_IN_MILLISECONDS / 2;
+    public static final long UPDATE_INTERVAL_IN_MILLISECONDS = 10000;   //10秒間隔で位置情報を更新。実際には多少頻度が多くなるかもしれない。
+    public static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS = UPDATE_INTERVAL_IN_MILLISECONDS / 2;    //最速の更新間隔。この値より頻繁に更新されることはない。
     private final static String REQUESTING_LOCATION_UPDATES_KEY = "requesting-location-updates-key";
     private final static String LAST_UPDATED_TIME_STRING_KEY = "last-updated-time-string-key";
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
@@ -86,8 +81,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private LocationRequest mLocationRequest;
     private GoogleApiClient mGoogleApiClient;
     private Boolean mRequestingLocationUpdates;
-//    private ActivityMapsBinding mBinding;
     private Button startLocationUpdateBtn, stopLocationUpdateBtn, Animatebtn;
+    private Map<String, LatLng> mapLatLng;
+    private List<LatLng> listLatLng;
+    private PolylineOptions polylineOptions;
+    private Polyline polyline;
+    private int color = Color.RED;
+    private int width = 3;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -145,19 +145,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     private void setButtonsEnabledState() {
         if (mRequestingLocationUpdates) {
-/*
-            mBinding.startUpdatesButton.setEnabled(false);
-            mBinding.stopUpdatesButton.setEnabled(true);
-*/
-
             startLocationUpdateBtn.setEnabled(false);
             stopLocationUpdateBtn.setEnabled(true);
         } else {
-/*
-            mBinding.startUpdatesButton.setEnabled(true);
-            mBinding.stopUpdatesButton.setEnabled(false);
-*/
-
             startLocationUpdateBtn.setEnabled(true);
             stopLocationUpdateBtn.setEnabled(false);
         }
@@ -235,6 +225,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onMapReady(GoogleMap googleMap) {
         Log.i(TAG, "onMapReady");
         mMap = googleMap;
+        mapLatLng = new LinkedHashMap<String, LatLng>();
+
+        polylineOptions = new PolylineOptions().color(color).width(width);
+        polyline = mMap.addPolyline(polylineOptions);
         setListeners();
     }
 
@@ -249,8 +243,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         .snippet("Lat,Lng="+clickLocation.latitude+","+clickLocation.longitude));
                 markerId = marker.getId();
                 Toast.makeText(getApplicationContext(), markerId, Toast.LENGTH_LONG).show();
-//                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(clickLocation, zoomLevel));
                 mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(clickLocation, mMap.getCameraPosition().zoom));
+
+                mapLatLng.put(markerId,clickLocation);  //clicked location will be polyline nodes
+                listLatLng = new ArrayList<LatLng>(mapLatLng.values());
+
+                polyline.setPoints(listLatLng);
             }
         });
 
@@ -266,7 +264,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mMap.setOnMarkerClickListener(new OnMarkerClickListener() {
             @Override
             public boolean onMarkerClick(Marker clickedMarker) {
+                markerId = clickedMarker.getId();
                 clickedMarker.remove();
+                mapLatLng.remove(markerId);
+                listLatLng = new ArrayList<LatLng>(mapLatLng.values());
+
+                polyline.setPoints(listLatLng);
+
                 return true;
             }
         });
