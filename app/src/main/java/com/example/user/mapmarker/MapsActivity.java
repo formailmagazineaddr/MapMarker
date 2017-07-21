@@ -2,6 +2,7 @@ package com.example.user.mapmarker;
 
 import android.Manifest;
 import android.graphics.Color;
+import android.os.Handler;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.content.ContextCompat;    //what?
 import android.support.v4.app.ActivityCompat;    //what?
@@ -50,6 +51,7 @@ import com.example.mylibmaps.*;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 //import com.example.mylibmaps.markerOperations;
+import com.example.mylibmaps.Animator;
 
 import java.util.*;
 
@@ -60,13 +62,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     private GoogleMap mMap;
 
-    private LatLng theUserLatLng;
     private float zoomLevel = 10.0F;
     private double latitude;
     private double longitude;
     private String markerId;
     private Marker marker;
+    private Marker theUserMarker;
     private markerOperations markerOps;
+    private Animator animator;
+    Thread AnimatorThread;
 
     protected static final String TAG = "debugTag";
     private final static String LOCATION_KEY = "location-key";
@@ -83,7 +87,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private Boolean mRequestingLocationUpdates;
     private Button startLocationUpdateBtn, stopLocationUpdateBtn, Animatebtn;
     private Map<String, LatLng> mapLatLng;
+    private Map<String, Marker> mapMarker;
     private List<LatLng> listLatLng;
+    private List<Marker> listMarker;
     private PolylineOptions polylineOptions;
     private Polyline polyline;
     private int color = Color.RED;
@@ -99,7 +105,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-//        mBinding = DataBindingUtil.setContentView(this, R.layout.activity_maps);
         startLocationUpdateBtn = (Button)findViewById(R.id.start_updates_button);
         stopLocationUpdateBtn = (Button)findViewById(R.id.stop_updates_button);
         mRequestingLocationUpdates = false;
@@ -153,7 +158,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-
     @Override
     protected void onStart() {
         Log.i(TAG, "onStart");
@@ -170,8 +174,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         if (mCurrentLocation == null) {
             mCurrentLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
             if(mCurrentLocation == null){return;}   //getLastLocation() is a method to get a known location. No known location then return null. If you want to get the latest place use requestLocationUpdates().
-            theUserLatLng = new LatLng( mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude() );
-            replaceMarkerOnMap();
+            LatLng theUserLatLng = new LatLng( mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude() );
+            theUserMarker = mMap.addMarker(new MarkerOptions()
+                            .position(theUserLatLng)
+                            .title("You"));
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(theUserLatLng, zoomLevel));
         }
     }
 
@@ -193,9 +200,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onLocationChanged(Location location) {
         Log.i(TAG, "onLocationChanged");
-//        mCurrentLocation = location;
-        theUserLatLng = new LatLng( location.getLatitude(), location.getLongitude() );
-        replaceMarkerOnMap();
+        LatLng theUserLatLng = new LatLng( location.getLatitude(), location.getLongitude() );
+        replaceMarkerOnMap(mMap, theUserMarker, theUserLatLng);
 /*
         mLastUpdateTime = DateFormat.getTimeInstance().format(new Date());
         updateUI();
@@ -203,13 +209,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         Toast.makeText(this, getResources().getString(R.string.location_updated_message), Toast.LENGTH_SHORT).show();
     }
 
-    private void replaceMarkerOnMap() {
-        if(marker != null) {marker.remove();}
-        marker = mMap.addMarker(new MarkerOptions()
-                .position(theUserLatLng)
-                .title("You")
-                .snippet("Lat,Lng="+theUserLatLng.latitude+","+theUserLatLng.longitude));
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(theUserLatLng, zoomLevel));
+    private void replaceMarkerOnMap(GoogleMap mMap, Marker marker, LatLng latLng) {
+        marker.setPosition(latLng);
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoomLevel));
     }
 
     /**
@@ -226,9 +228,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         Log.i(TAG, "onMapReady");
         mMap = googleMap;
         mapLatLng = new LinkedHashMap<String, LatLng>();
+        mapMarker = new LinkedHashMap<String, Marker>();
 
         polylineOptions = new PolylineOptions().color(color).width(width);
         polyline = mMap.addPolyline(polylineOptions);
+        markerOps = new markerOperations();
+
+        animator = new Animator();
+//        AnimatorThread = new Thread(animator);
+
         setListeners();
     }
 
@@ -245,8 +253,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 Toast.makeText(getApplicationContext(), markerId, Toast.LENGTH_LONG).show();
                 mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(clickLocation, mMap.getCameraPosition().zoom));
 
-                mapLatLng.put(markerId,clickLocation);  //clicked location will be polyline nodes
+                mapLatLng.put(markerId,clickLocation);
+                mapMarker.put(markerId,marker);
                 listLatLng = new ArrayList<LatLng>(mapLatLng.values());
+                listMarker = new ArrayList<Marker>(mapMarker.values());
 
                 polyline.setPoints(listLatLng);
             }
@@ -256,7 +266,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mMap.setOnMapLongClickListener(new OnMapLongClickListener() {
             @Override
             public void onMapLongClick(LatLng longClickLocation) {
-                markerOps.animateMarker(mMap, marker, longClickLocation, false);
+                Log.i(TAG, "start markerOps.animateMarker()");
+
+//                markerOps.animateMarker(mMap, theUserMarker, longClickLocation, false);
+
+                animator.initialize(listMarker, mMap);
+                animator.animateMarker();
+//                AnimatorThread.start();
             }
         });
 
@@ -267,8 +283,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 markerId = clickedMarker.getId();
                 clickedMarker.remove();
                 mapLatLng.remove(markerId);
+                mapMarker.remove(markerId);
                 listLatLng = new ArrayList<LatLng>(mapLatLng.values());
-
+                listMarker = new ArrayList<Marker>(mapMarker.values());
                 polyline.setPoints(listLatLng);
 
                 return true;

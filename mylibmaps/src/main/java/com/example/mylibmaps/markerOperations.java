@@ -12,11 +12,15 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.Projection;
 
+import android.util.Log;
 import android.view.animation.Interpolator;
 import android.graphics.Point;
 import android.view.animation.LinearInterpolator;
+import java.util.*;
 
 public class markerOperations {
+//    private boolean runFinish = true;
+
     public void animateMarker(final GoogleMap mMap,
                               final Marker marker,
                               final LatLng toPosition,
@@ -28,7 +32,6 @@ public class markerOperations {
         Point startPoint = proj.toScreenLocation(marker.getPosition());
         final LatLng startLatLng = proj.fromScreenLocation(startPoint);
         final long duration = 500;
-
         final Interpolator interpolator = new LinearInterpolator();
 
         handler.post(new Runnable() {
@@ -47,6 +50,7 @@ public class markerOperations {
                     // Post again 16ms later.
                     handler.postDelayed(this, 16);
                 } else {
+//                    runFinish = false;
                     if (hideMarker) {
                         marker.setVisible(false);
                     } else {
@@ -56,4 +60,8 @@ public class markerOperations {
             }
         });
     }
+
+/*    public boolean isAlive(){
+        return runFinish;
+    }*/
 }
